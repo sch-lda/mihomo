@@ -11,12 +11,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Dreamacro/clash/adapter/inbound"
-	CN "github.com/Dreamacro/clash/common/net"
-	"github.com/Dreamacro/clash/common/utils"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/log"
-	"github.com/Dreamacro/clash/tunnel/statistic"
+	"github.com/metacubex/mihomo/adapter/inbound"
+	CN "github.com/metacubex/mihomo/common/net"
+	"github.com/metacubex/mihomo/common/utils"
+	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/log"
+	"github.com/metacubex/mihomo/tunnel/statistic"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -93,6 +93,7 @@ func Start(addr string, tlsAddr string, secret string,
 		r.Mount("/dns", dnsRouter())
 		r.Mount("/restart", restartRouter())
 		r.Mount("/upgrade", upgradeRouter())
+		addExternalRouters(r)
 
 	})
 
@@ -189,7 +190,7 @@ func authentication(next http.Handler) http.Handler {
 }
 
 func hello(w http.ResponseWriter, r *http.Request) {
-	render.JSON(w, r, render.M{"hello": "clash.meta"})
+	render.JSON(w, r, render.M{"hello": "mihomo"})
 }
 
 func traffic(w http.ResponseWriter, r *http.Request) {

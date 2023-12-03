@@ -13,32 +13,35 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Dreamacro/clash/adapter"
-	"github.com/Dreamacro/clash/adapter/outbound"
-	"github.com/Dreamacro/clash/adapter/outboundgroup"
-	"github.com/Dreamacro/clash/adapter/provider"
-	N "github.com/Dreamacro/clash/common/net"
-	"github.com/Dreamacro/clash/common/utils"
-	"github.com/Dreamacro/clash/component/auth"
-	"github.com/Dreamacro/clash/component/fakeip"
-	"github.com/Dreamacro/clash/component/geodata"
-	"github.com/Dreamacro/clash/component/geodata/router"
-	P "github.com/Dreamacro/clash/component/process"
-	"github.com/Dreamacro/clash/component/resolver"
-	SNIFF "github.com/Dreamacro/clash/component/sniffer"
-	tlsC "github.com/Dreamacro/clash/component/tls"
-	"github.com/Dreamacro/clash/component/trie"
-	C "github.com/Dreamacro/clash/constant"
-	providerTypes "github.com/Dreamacro/clash/constant/provider"
-	snifferTypes "github.com/Dreamacro/clash/constant/sniffer"
-	"github.com/Dreamacro/clash/dns"
-	L "github.com/Dreamacro/clash/listener"
-	LC "github.com/Dreamacro/clash/listener/config"
-	"github.com/Dreamacro/clash/log"
-	R "github.com/Dreamacro/clash/rules"
-	RP "github.com/Dreamacro/clash/rules/provider"
-	T "github.com/Dreamacro/clash/tunnel"
+	"github.com/metacubex/mihomo/adapter"
+	"github.com/metacubex/mihomo/adapter/outbound"
+	"github.com/metacubex/mihomo/adapter/outboundgroup"
+	"github.com/metacubex/mihomo/adapter/provider"
+	N "github.com/metacubex/mihomo/common/net"
+	"github.com/metacubex/mihomo/common/utils"
+	"github.com/metacubex/mihomo/component/auth"
+	"github.com/metacubex/mihomo/component/fakeip"
+	"github.com/metacubex/mihomo/component/geodata"
+	"github.com/metacubex/mihomo/component/geodata/router"
+	P "github.com/metacubex/mihomo/component/process"
+	"github.com/metacubex/mihomo/component/resolver"
+	SNIFF "github.com/metacubex/mihomo/component/sniffer"
+	tlsC "github.com/metacubex/mihomo/component/tls"
+	"github.com/metacubex/mihomo/component/trie"
+	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/constant/features"
+	providerTypes "github.com/metacubex/mihomo/constant/provider"
+	snifferTypes "github.com/metacubex/mihomo/constant/sniffer"
+	"github.com/metacubex/mihomo/dns"
+	L "github.com/metacubex/mihomo/listener"
+	LC "github.com/metacubex/mihomo/listener/config"
+	"github.com/metacubex/mihomo/log"
+	rewrites "github.com/metacubex/mihomo/rewrite"
+	R "github.com/metacubex/mihomo/rules"
+	RP "github.com/metacubex/mihomo/rules/provider"
+	T "github.com/metacubex/mihomo/tunnel"
 
+	orderedmap "github.com/wk8/go-ordered-map/v2"
 	"gopkg.in/yaml.v3"
 )
 
@@ -79,6 +82,7 @@ type Inbound struct {
 	BindAddress       string         `json:"bind-address"`
 	InboundTfo        bool           `json:"inbound-tfo"`
 	InboundMPTCP      bool           `json:"inbound-mptcp"`
+	MitmPort          int            `json:"mitm-port"`
 }
 
 // Controller config
@@ -111,9 +115,10 @@ type DNS struct {
 	Listen                string           `yaml:"listen"`
 	EnhancedMode          C.DNSMode        `yaml:"enhanced-mode"`
 	DefaultNameserver     []dns.NameServer `yaml:"default-nameserver"`
+	CacheAlgorithm        string           `yaml:"cache-algorithm"`
 	FakeIPRange           *fakeip.Pool
 	Hosts                 *trie.DomainTrie[resolver.HostValue]
-	NameServerPolicy      map[string][]dns.NameServer
+	NameServerPolicy      *orderedmap.OrderedMap[string, []dns.NameServer]
 	ProxyServerNameserver []dns.NameServer
 }
 
@@ -154,6 +159,12 @@ type Sniffer struct {
 	ParsePureIp     bool
 }
 
+// Mitm config
+type Mitm struct {
+	Port  int           `yaml:"port" json:"port"`
+	Rules C.RewriteRule `yaml:"rules" json:"rules"`
+}
+
 // Experimental config
 type Experimental struct {
 	Fingerprints     []string `yaml:"fingerprints"`
@@ -161,10 +172,11 @@ type Experimental struct {
 	QUICGoDisableECN bool     `yaml:"quic-go-disable-ecn"`
 }
 
-// Config is clash config manager
+// Config is mihomo config manager
 type Config struct {
 	General       *General
 	IPTables      *IPTables
+	Mitm          *Mitm
 	NTP           *NTP
 	DNS           *DNS
 	Experimental  *Experimental
@@ -192,6 +204,7 @@ type RawNTP struct {
 }
 
 type RawDNS struct {
+
 	Enable                bool              `yaml:"enable" json:"enable"`
 	PreferH3              bool              `yaml:"prefer-h3" json:"prefer-h3"`
 	IPv6                  bool              `yaml:"ipv6" json:"ipv6"`
@@ -207,6 +220,7 @@ type RawDNS struct {
 	DefaultNameserver     []string          `yaml:"default-nameserver" json:"default-nameserver"`
 	NameServerPolicy      map[string]any    `yaml:"nameserver-policy" json:"nameserver-policy"`
 	ProxyServerNameserver []string          `yaml:"proxy-server-nameserver" json:"proxy-server-nameserver"`
+
 }
 
 type RawFallbackFilter struct {
@@ -266,6 +280,11 @@ type RawTuicServer struct {
 	CWND                  int               `yaml:"cwnd" json:"cwnd,omitempty"`
 }
 
+type RawMitm struct {
+	Port  int                    `yaml:"port" json:"port"`
+	Rules []rewrites.RawMitmRule `yaml:"rules" json:"rules"`
+}
+
 type RawConfig struct {
 	Port                    int               `yaml:"port" json:"port"`
 	SocksPort               int               `yaml:"socks-port" json:"socks-port"`
@@ -311,6 +330,7 @@ type RawConfig struct {
 	TuicServer    RawTuicServer             `yaml:"tuic-server"`
 	EBpf          EBpf                      `yaml:"ebpf"`
 	IPTables      IPTables                  `yaml:"iptables"`
+	MITM          RawMitm                   `yaml:"mitm"`
 	Experimental  Experimental              `yaml:"experimental"`
 	Profile       Profile                   `yaml:"profile"`
 	GeoXUrl       GeoXUrl                   `yaml:"geox-url"`
@@ -465,6 +485,10 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 			ParsePureIp:     true,
 			OverrideDest:    true,
 		},
+		MITM: RawMitm{
+			Port:  0,
+			Rules: []rewrites.RawMitmRule{},
+		},
 		Profile: Profile{
 			StoreSelected: true,
 		},
@@ -549,10 +573,17 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	}
 	config.DNS = dnsCfg
 
+
 	err = parseTuicServer(rawCfg.TuicServer, config.General)
 	if err != nil {
 		return nil, err
 	}
+
+	mitm, err := parseMitm(rawCfg.MITM)
+	if err != nil {
+		return nil, err
+	}
+	config.Mitm = mitm
 
 	config.Users = parseAuthentication(rawCfg.Authentication)
 
@@ -620,6 +651,7 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 			RedirPort:         cfg.RedirPort,
 			TProxyPort:        cfg.TProxyPort,
 			MixedPort:         cfg.MixedPort,
+			MitmPort:          cfg.MitmPort,
 			ShadowSocksConfig: cfg.ShadowSocksConfig,
 			VmessConfig:       cfg.VmessConfig,
 			AllowLan:          cfg.AllowLan,
@@ -663,9 +695,15 @@ func parseProxies(cfg *RawConfig) (proxies map[string]C.Proxy, providersMap map[
 
 	proxies["DIRECT"] = adapter.NewProxy(outbound.NewDirect())
 	proxies["REJECT"] = adapter.NewProxy(outbound.NewReject())
+	proxies["REJECT-DROP"] = adapter.NewProxy(outbound.NewRejectDrop())
 	proxies["COMPATIBLE"] = adapter.NewProxy(outbound.NewCompatible())
 	proxies["PASS"] = adapter.NewProxy(outbound.NewPass())
 	proxyList = append(proxyList, "DIRECT", "REJECT")
+
+	if cfg.MITM.Port != 0 {
+		proxies["MITM"] = adapter.NewProxy(outbound.NewMitm(fmt.Sprintf("127.0.0.1:%d", cfg.MITM.Port)))
+		proxyList = append(proxyList, "MITM")
+	}
 
 	// parse proxy
 	for idx, mapping := range proxiesConfig {
@@ -916,9 +954,9 @@ func parseHosts(cfg *RawConfig) (*trie.DomainTrie[resolver.HostValue], error) {
 
 	if len(cfg.Hosts) != 0 {
 		for domain, anyValue := range cfg.Hosts {
-			if str, ok := anyValue.(string); ok && str == "clash" {
+			if str, ok := anyValue.(string); ok && str == "lan" {
 				if addrs, err := net.InterfaceAddrs(); err != nil {
-					log.Errorln("insert clash to host error: %s", err)
+					log.Errorln("insert lan to host error: %s", err)
 				} else {
 					ips := make([]netip.Addr, 0)
 					for _, addr := range addrs {
@@ -947,6 +985,14 @@ func parseHosts(cfg *RawConfig) (*trie.DomainTrie[resolver.HostValue], error) {
 			_ = tree.Insert(domain, value)
 		}
 	}
+
+	if cfg.MITM.Port != 0 {
+		value, _ := resolver.NewHostValue("8.8.9.9")
+		if err := tree.Insert("mitm.clash", value); err != nil {
+			log.Errorln("insert mitm.clash to host error: %s", err.Error())
+		}
+	}
+
 	tree.Optimize()
 
 	return tree, nil
@@ -1084,12 +1130,13 @@ func parsePureDNSServer(server string) string {
 		}
 	}
 }
-func parseNameServerPolicy(nsPolicy map[string]any, ruleProviders map[string]providerTypes.RuleProvider, preferH3 bool) (map[string][]dns.NameServer, error) {
-	policy := map[string][]dns.NameServer{}
-	updatedPolicy := make(map[string]interface{})
+func parseNameServerPolicy(nsPolicy *orderedmap.OrderedMap[string, any], ruleProviders map[string]providerTypes.RuleProvider, preferH3 bool) (*orderedmap.OrderedMap[string, []dns.NameServer], error) {
+	policy := orderedmap.New[string, []dns.NameServer]()
+	updatedPolicy := orderedmap.New[string, any]()
 	re := regexp.MustCompile(`[a-zA-Z0-9\-]+\.[a-zA-Z]{2,}(\.[a-zA-Z]{2,})?`)
 
-	for k, v := range nsPolicy {
+	for pair := nsPolicy.Oldest(); pair != nil; pair = pair.Next() {
+		k, v := pair.Key, pair.Value
 		if strings.Contains(k, ",") {
 			if strings.Contains(k, "geosite:") {
 				subkeys := strings.Split(k, ":")
@@ -1097,7 +1144,7 @@ func parseNameServerPolicy(nsPolicy map[string]any, ruleProviders map[string]pro
 				subkeys = strings.Split(subkeys[0], ",")
 				for _, subkey := range subkeys {
 					newKey := "geosite:" + subkey
-					updatedPolicy[newKey] = v
+					updatedPolicy.Store(newKey, v)
 				}
 			} else if strings.Contains(k, "rule-set:") {
 				subkeys := strings.Split(k, ":")
@@ -1105,20 +1152,21 @@ func parseNameServerPolicy(nsPolicy map[string]any, ruleProviders map[string]pro
 				subkeys = strings.Split(subkeys[0], ",")
 				for _, subkey := range subkeys {
 					newKey := "rule-set:" + subkey
-					updatedPolicy[newKey] = v
+					updatedPolicy.Store(newKey, v)
 				}
 			} else if re.MatchString(k) {
 				subkeys := strings.Split(k, ",")
 				for _, subkey := range subkeys {
-					updatedPolicy[subkey] = v
+					updatedPolicy.Store(subkey, v)
 				}
 			}
 		} else {
-			updatedPolicy[k] = v
+			updatedPolicy.Store(k, v)
 		}
 	}
 
-	for domain, server := range updatedPolicy {
+	for pair := updatedPolicy.Oldest(); pair != nil; pair = pair.Next() {
+		domain, server := pair.Key, pair.Value
 		servers, err := utils.ToStringSlice(server)
 		if err != nil {
 			return nil, err
@@ -1143,7 +1191,7 @@ func parseNameServerPolicy(nsPolicy map[string]any, ruleProviders map[string]pro
 				}
 			}
 		}
-		policy[domain] = nameservers
+		policy.Store(domain, nameservers)
 	}
 
 	return policy, nil
@@ -1329,6 +1377,12 @@ func parseDNS(rawCfg *RawConfig, hosts *trie.DomainTrie[resolver.HostValue], rul
 		dnsCfg.Hosts = hosts
 	}
 
+	if cfg.CacheAlgorithm == "" || cfg.CacheAlgorithm == "lru" {
+		dnsCfg.CacheAlgorithm = "lru"
+	} else {
+		dnsCfg.CacheAlgorithm = "arc"
+	}
+
 	return dnsCfg, nil
 }
 
@@ -1485,4 +1539,29 @@ func parseSniffer(snifferRaw RawSniffer) (*Sniffer, error) {
 	sniffer.SkipDomain = skipDomainTrie.NewDomainSet()
 
 	return sniffer, nil
+}
+
+func parseMitm(rawMitm RawMitm) (*Mitm, error) {
+	var (
+		req []C.Rewrite
+		res []C.Rewrite
+	)
+
+	for _, line := range rawMitm.Rules {
+		rule, err := rewrites.ParseRewrite(line)
+		if err != nil {
+			return nil, fmt.Errorf("parse rewrite rule failure: %w", err)
+		}
+
+		if rule.RuleType() == C.MitmResponseHeader || rule.RuleType() == C.MitmResponseBody {
+			res = append(res, rule)
+		} else {
+			req = append(req, rule)
+		}
+	}
+
+	return &Mitm{
+		Port:  rawMitm.Port,
+		Rules: rewrites.NewRewriteRules(req, res),
+	}, nil
 }

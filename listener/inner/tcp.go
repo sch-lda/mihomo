@@ -6,7 +6,7 @@ import (
 	"net/netip"
 	"strconv"
 
-	C "github.com/Dreamacro/clash/constant"
+	C "github.com/metacubex/mihomo/constant"
 )
 
 var tunnel C.Tunnel
@@ -26,9 +26,11 @@ func HandleTcp(address string) (conn net.Conn, err error) {
 	metadata.NetWork = C.TCP
 	metadata.Type = C.INNER
 	metadata.DNSMode = C.DNSNormal
-	metadata.Process = C.ClashName
+
+	metadata.Process = C.MihomoName
 	metadata.RawSrcAddr = conn1.RemoteAddr()
 	metadata.RawDstAddr = conn1.LocalAddr()
+
 	if h, port, err := net.SplitHostPort(address); err == nil {
 		if port, err := strconv.ParseUint(port, 10, 16); err == nil {
 			metadata.DstPort = uint16(port)

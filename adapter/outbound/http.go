@@ -13,11 +13,11 @@ import (
 	"net/http"
 	"strconv"
 
-	N "github.com/Dreamacro/clash/common/net"
-	"github.com/Dreamacro/clash/component/ca"
-	"github.com/Dreamacro/clash/component/dialer"
-	"github.com/Dreamacro/clash/component/proxydialer"
-	C "github.com/Dreamacro/clash/constant"
+	N "github.com/metacubex/mihomo/common/net"
+	"github.com/metacubex/mihomo/component/ca"
+	"github.com/metacubex/mihomo/component/dialer"
+	"github.com/metacubex/mihomo/component/proxydialer"
+	C "github.com/metacubex/mihomo/constant"
 )
 
 type Http struct {
@@ -111,6 +111,10 @@ func (h *Http) shakeHand(metadata *C.Metadata, rw io.ReadWriter) error {
 	if h.user != "" && h.pass != "" {
 		auth := h.user + ":" + h.pass
 		tempHeaders["Proxy-Authorization"] = "Basic " + base64.StdEncoding.EncodeToString([]byte(auth))
+	}
+
+	if metadata.Type == C.MITM {
+		tempHeaders["Origin-Request-Source-Address"] = metadata.SourceAddress()
 	}
 
 	for key, value := range tempHeaders {

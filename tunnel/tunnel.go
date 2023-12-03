@@ -11,16 +11,17 @@ import (
 
 	"github.com/jpillora/backoff"
 
-	N "github.com/Dreamacro/clash/common/net"
-	"github.com/Dreamacro/clash/component/nat"
-	P "github.com/Dreamacro/clash/component/process"
-	"github.com/Dreamacro/clash/component/resolver"
-	"github.com/Dreamacro/clash/component/sniffer"
-	C "github.com/Dreamacro/clash/constant"
-	"github.com/Dreamacro/clash/constant/provider"
-	icontext "github.com/Dreamacro/clash/context"
-	"github.com/Dreamacro/clash/log"
-	"github.com/Dreamacro/clash/tunnel/statistic"
+	N "github.com/metacubex/mihomo/common/net"
+	"github.com/metacubex/mihomo/component/nat"
+	P "github.com/metacubex/mihomo/component/process"
+	"github.com/metacubex/mihomo/component/resolver"
+	"github.com/metacubex/mihomo/component/sniffer"
+	C "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/constant/features"
+	"github.com/metacubex/mihomo/constant/provider"
+	icontext "github.com/metacubex/mihomo/context"
+	"github.com/metacubex/mihomo/log"
+	"github.com/metacubex/mihomo/tunnel/statistic"
 )
 
 var (
@@ -29,6 +30,7 @@ var (
 	udpQueue       = make(chan C.PacketAdapter, 200)
 	natTable       = nat.New()
 	rules          []C.Rule
+	rewrites       C.RewriteRule
 	listeners      = make(map[string]C.InboundListener)
 	subRules       map[string][]C.Rule
 	proxies        = make(map[string]C.Proxy)
@@ -214,7 +216,19 @@ func SetFindProcessMode(mode P.FindProcessMode) {
 
 func isHandle(t C.Type) bool {
 	status := status.Load()
-	return status == Running || (status == Inner && t == C.INNER)
+	return status == Running || (status == Inner && (t == C.INNER || t == C.MITM))
+}
+
+// Rewrites return all rewrites
+func Rewrites() C.RewriteRule {
+	return rewrites
+}
+
+// UpdateRewrites handle update rewrites
+func UpdateRewrites(rules C.RewriteRule) {
+	configMux.Lock()
+	rewrites = rules
+	configMux.Unlock()
 }
 
 // processUDP starts a loop to handle udp packet
@@ -490,8 +504,9 @@ func handleTCPConn(connCtx C.ConnContext) {
 		return
 	}
 
+	isMitmProxy := metadata.Type == C.MITM
 	dialMetadata := metadata
-	if len(metadata.Host) > 0 {
+	if len(metadata.Host) > 0 && !isMitmProxy {
 		if node, ok := resolver.DefaultHosts.Search(metadata.Host, false); ok {
 			if dstIp, _ := node.RandIP(); !FakeIPRange().Contains(dstIp) {
 				dialMetadata.DstIP = dstIp
@@ -604,6 +619,10 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 	}
 
 	for _, rule := range getRules(metadata) {
+		if metadata.Type == C.MITM && rule.Adapter() == "MITM" {
+			continue
+		}
+
 		if !resolved && shouldResolveIP(rule, metadata) {
 			func() {
 				ctx, cancel := context.WithTimeout(context.Background(), resolver.DefaultDNSTimeout)
@@ -619,6 +638,7 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 			}()
 		}
 
+
 		if !findProcessMode.Off() && !processFound && (findProcessMode.Always() || rule.ShouldFindProcess()) {
 			pkg, err := P.FindPackageName(metadata)
 			if err != nil {
@@ -630,6 +650,7 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 					log.Debugln("[Process] %s from process %s", metadata.String(), metadata.Process)
 				}
 				procesCache = metadata.Process
+
 			}
 		}
 
