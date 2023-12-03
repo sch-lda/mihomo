@@ -63,15 +63,12 @@ func ParseRuleProvider(name string, mapping map[string]interface{}, parse func(t
 	case "http":
 		if schema.Path != "" {
 			path := C.Path.Resolve(schema.Path)
-			if !features.CMFA && !C.Path.IsSafePath(path) {
-				return nil, fmt.Errorf("%w: %s", errSubPath, path)
-			}
+
 			vehicle = resource.NewHTTPVehicle(schema.URL, path)
 		} else {
 			path := C.Path.GetPathByHash("rules", schema.URL)
 			vehicle = resource.NewHTTPVehicle(schema.URL, path)
 		}
-
 	default:
 		return nil, fmt.Errorf("unsupported vehicle type: %s", schema.Type)
 	}

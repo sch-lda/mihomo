@@ -66,10 +66,10 @@ func NewWithAuthenticate(addr string, tunnel C.Tunnel, authenticate bool, additi
 				}
 				continue
 			}
-			if features.CMFA {
-				if t, ok := conn.(*net.TCPConn); ok {
-					t.SetKeepAlive(false)
-				}
+
+			if t, ok := conn.(*net.TCPConn); ok {
+				t.SetKeepAlive(false)
+
 			}
 			go HandleConn(conn, tunnel, c, additions...)
 		}

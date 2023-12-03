@@ -61,7 +61,6 @@ type General struct {
 	TCPConcurrent           bool              `json:"tcp-concurrent"`
 	FindProcessMode         P.FindProcessMode `json:"find-process-mode"`
 	Sniffing                bool              `json:"sniffing"`
-	EBpf                    EBpf              `json:"-"`
 	GlobalClientFingerprint string            `json:"global-client-fingerprint"`
 	GlobalUA                string            `json:"global-ua"`
 }
@@ -205,22 +204,23 @@ type RawNTP struct {
 }
 
 type RawDNS struct {
-	Enable                bool                                `yaml:"enable" json:"enable"`
-	PreferH3              bool                                `yaml:"prefer-h3" json:"prefer-h3"`
-	IPv6                  bool                                `yaml:"ipv6" json:"ipv6"`
-	IPv6Timeout           uint                                `yaml:"ipv6-timeout" json:"ipv6-timeout"`
-	UseHosts              bool                                `yaml:"use-hosts" json:"use-hosts"`
-	NameServer            []string                            `yaml:"nameserver" json:"nameserver"`
-	Fallback              []string                            `yaml:"fallback" json:"fallback"`
-	FallbackFilter        RawFallbackFilter                   `yaml:"fallback-filter" json:"fallback-filter"`
-	Listen                string                              `yaml:"listen" json:"listen"`
-	EnhancedMode          C.DNSMode                           `yaml:"enhanced-mode" json:"enhanced-mode"`
-	FakeIPRange           string                              `yaml:"fake-ip-range" json:"fake-ip-range"`
-	FakeIPFilter          []string                            `yaml:"fake-ip-filter" json:"fake-ip-filter"`
-	DefaultNameserver     []string                            `yaml:"default-nameserver" json:"default-nameserver"`
-	CacheAlgorithm        string                              `yaml:"cache-algorithm" json:"cache-algorithm"`
-	NameServerPolicy      *orderedmap.OrderedMap[string, any] `yaml:"nameserver-policy" json:"nameserver-policy"`
-	ProxyServerNameserver []string                            `yaml:"proxy-server-nameserver" json:"proxy-server-nameserver"`
+
+	Enable                bool              `yaml:"enable" json:"enable"`
+	PreferH3              bool              `yaml:"prefer-h3" json:"prefer-h3"`
+	IPv6                  bool              `yaml:"ipv6" json:"ipv6"`
+	IPv6Timeout           uint              `yaml:"ipv6-timeout" json:"ipv6-timeout"`
+	UseHosts              bool              `yaml:"use-hosts" json:"use-hosts"`
+	NameServer            []string          `yaml:"nameserver" json:"nameserver"`
+	Fallback              []string          `yaml:"fallback" json:"fallback"`
+	FallbackFilter        RawFallbackFilter `yaml:"fallback-filter" json:"fallback-filter"`
+	Listen                string            `yaml:"listen" json:"listen"`
+	EnhancedMode          C.DNSMode         `yaml:"enhanced-mode" json:"enhanced-mode"`
+	FakeIPRange           string            `yaml:"fake-ip-range" json:"fake-ip-range"`
+	FakeIPFilter          []string          `yaml:"fake-ip-filter" json:"fake-ip-filter"`
+	DefaultNameserver     []string          `yaml:"default-nameserver" json:"default-nameserver"`
+	NameServerPolicy      map[string]any    `yaml:"nameserver-policy" json:"nameserver-policy"`
+	ProxyServerNameserver []string          `yaml:"proxy-server-nameserver" json:"proxy-server-nameserver"`
+
 }
 
 type RawFallbackFilter struct {
@@ -291,7 +291,6 @@ type RawConfig struct {
 	RedirPort               int               `yaml:"redir-port" json:"redir-port"`
 	TProxyPort              int               `yaml:"tproxy-port" json:"tproxy-port"`
 	MixedPort               int               `yaml:"mixed-port" json:"mixed-port"`
-	MitmPort                int               `yaml:"mitm-port" json:"mitm-port"`
 	ShadowSocksConfig       string            `yaml:"ss-config"`
 	VmessConfig             string            `yaml:"vmess-config"`
 	InboundTfo              bool              `yaml:"inbound-tfo"`
@@ -514,7 +513,6 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	startTime := time.Now()
 	config.Experimental = &rawCfg.Experimental
 	config.Profile = &rawCfg.Profile
-	config.IPTables = &rawCfg.IPTables
 	config.TLS = &rawCfg.RawTLS
 
 	general, err := parseGeneral(rawCfg)
@@ -575,10 +573,6 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	}
 	config.DNS = dnsCfg
 
-	err = parseTun(rawCfg.Tun, config.General)
-	if !features.CMFA && err != nil {
-		return nil, err
-	}
 
 	err = parseTuicServer(rawCfg.TuicServer, config.General)
 	if err != nil {
@@ -683,7 +677,6 @@ func parseGeneral(cfg *RawConfig) (*General, error) {
 		GeodataLoader:           cfg.GeodataLoader,
 		TCPConcurrent:           cfg.TCPConcurrent,
 		FindProcessMode:         cfg.FindProcessMode,
-		EBpf:                    cfg.EBpf,
 		GlobalClientFingerprint: cfg.GlobalClientFingerprint,
 		GlobalUA:                cfg.GlobalUA,
 	}, nil

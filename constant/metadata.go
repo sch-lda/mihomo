@@ -151,8 +151,9 @@ type Metadata struct {
 	SpecialRules string     `json:"specialRules"`
 	RemoteDst    string     `json:"remoteDestination"`
 
-	RawSrcAddr net.Addr 	`json:"-"`
-	RawDstAddr net.Addr 	`json:"-"`
+	RawSrcAddr net.Addr `json:"-"`
+	RawDstAddr net.Addr `json:"-"`
+
 	// Only domain rule
 	SniffHost string `json:"sniffHost"`
 	// Only Mitm rule

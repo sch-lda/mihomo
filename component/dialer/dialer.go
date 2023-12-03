@@ -71,7 +71,8 @@ func DialContext(ctx context.Context, network, address string, options ...Option
 }
 
 func ListenPacket(ctx context.Context, network, address string, options ...Option) (net.PacketConn, error) {
-	if features.CMFA && DefaultSocketHook != nil {
+
+	if DefaultSocketHook != nil {
 		return listenPacketHooked(ctx, network, address)
 	}
 
@@ -119,7 +120,8 @@ func GetTcpConcurrent() bool {
 }
 
 func dialContext(ctx context.Context, network string, destination netip.Addr, port string, opt *option) (net.Conn, error) {
-	if features.CMFA && DefaultSocketHook != nil {
+
+	if DefaultSocketHook != nil {
 		return dialContextHooked(ctx, network, destination, port)
 	}
 

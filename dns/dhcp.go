@@ -1,4 +1,6 @@
-//go:build !(android && cmfa)
+
+//go:build disabled
+// +build disabled
 
 package dns
 
